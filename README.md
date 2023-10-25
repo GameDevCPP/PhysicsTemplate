@@ -1,89 +1,287 @@
-# CMake SFML Project Template
 
-This repository template should allow for a fast and hassle-free kick start of your next SFML project using CMake.
-Thanks to [GitHub's nature of templates](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template), you can fork this repository without inheriting its Git history.
+## Box2D
 
-The template starts out very basic, but might receive additional features over time:
 
-- Basic CMake script to build your project and link SFML on any operating system
-- Basic [GitHub Actions](https://github.com/features/actions) script for all major platforms
+We will be using the [Box2D](http://box2d.org/) physics engine from here on. B2D is relatively robust and well used. Building a 2d physics engine yourself isn't an impossible task, but we don't have time to cover it in this module, so we will be using something that already exists.
 
-## How to Use
+When with picking software off the web, chances are it needs some tweaks. B2D doesn't have a well-built CMake Script, but thanks to the process of open-source software, [Sam fixed it](https://github.com/dooglz/Box2D/commit/e8d2cafa7f1300f5916a2e22f277d998a739e835).
 
-1. Follow the above instructions about how to use GitHub's project template feature to create your own project.
-1. Open [CMakeLists.txt](CMakeLists.txt). Rename the project and the executable to whatever name you want. The project and executable names don't have to match.
-1. Change the source files listed in [`add_executable`](CMakeLists.txt#L10) to match the source files your project requires.
-1. Configure and build your project. Most popular IDEs support CMake projects with very little effort on your part.
-    - [VS Code](https://code.visualstudio.com) via the [CMake extension](https://code.visualstudio.com/docs/cpp/cmake-linux)
-    - [Visual Studio](https://docs.microsoft.com/en-us/cpp/build/cmake-projects-in-visual-studio?view=msvc-170)
-    - [CLion](https://www.jetbrains.com/clion/features/cmake-support.html)
-    - [Qt Creator](https://doc.qt.io/qtcreator/creator-project-cmake.html)
+The fix is still pending in a pull request to the main repo so for now we will use my fork.
 
-    Using CMake from the command line is straightforward as well.
+### Add the Submodule
 
-    For a single-configuration generator (typically the case on Linux and macOS):
-    ```
-    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-    cmake --build build
-    ```
+We haven't done this since the very beginning when we added SFML, time
+to do it again. Open gitbash in the root of your repo
 
-    For a multi-configuration generator (typically the case on Windows):
-    ```
-    cmake -S . -B build
-    cmake --build build --config Release
-    ```
-1. Enjoy!
+```bash
+git submodule add https://github.com/dooglz/Box2D.git lib/b2d
+git submodule init
+git submodule update
+```
 
-## Upgrading SFML
+### Amend the CMakeLists
 
-SFML is found via CMake's [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html) module.
-FetchContent automatically downloads SFML from GitHub and builds it alongside your own code.
-Beyond the convenience of not having to install SFML yourself, this ensures ABI compatability and simplifies things like specifying static versus shared libraries.
+Adding B2D to our build process is pretty easy:
 
-Modifying what version of SFML you want is as easy as changing the [`GIT_TAG`](CMakeLists.txt#L7) argument.
-Currently it uses the latest in-development version of SFML 2 via the `2.6.x` tag.
-If you're feeling adventurous and want to give SFML 3 a try, use the `master` tag.
-Beware, this requires changing your code to suit the modified API!
-The nice folks in the [SFML community](https://github.com/SFML/SFML#community) can help you with that transition and the bugs you may encounter along the way.
+```cmake
+# B2D - Box2D phyics library
+add_subdirectory("lib/b2d/Box2D")
+#include_directories("lib/b2d/Box2D/")
+set(B2D_INCS "lib/b2d/Box2D/")
+link_directories("${CMAKE_BINARY_DIR}/lib/sfml/lib")
+```
 
-## But I want to...
+Then we can just link with `Box2D` and include `${B2D_INCS}`.
 
-Modify CMake options by adding them as configuration parameters (with a `-D` flag) or by modifying the contents of CMakeCache.txt and rebuilding.
+```cmake
+## physics
+file(GLOB_RECURSE SOURCES 5_physics/*.cpp 5_physics/*.h)
+add_executable(5_PHYSICS ${SOURCES})
+target_include_directories(5_PHYSICS SYSTEM PRIVATE ${SFML_INCS} ${B2D_INCS})
+target_link_libraries(5_PHYSICS Box2D sfml-graphics)
+set(EXECUTABLES ${EXECUTABLES} PRACTICAL_5_PHYSICS)
+```
 
-### Use Static Libraries
+Remember you'll have to add multiple things to the target_link_libraries line if you want to use Box2D, SMFL, and our libraries we've created!
 
-By default SFML builds shared libraries and this default is inherited by your project.
-CMake's [`BUILD_SHARED_LIBS`](https://cmake.org/cmake/help/latest/variable/BUILD_SHARED_LIBS.html) option lets you pick static or shared libraries for the entire project.
+## A standard physics Engine
 
-### Change Compilers
 
-See the variety of [`CMAKE_<LANG>_COMPILER`](https://cmake.org/cmake/help/latest/variable/CMAKE_LANG_COMPILER.html) options.
-In particular you'll want to modify `CMAKE_CXX_COMPILER` to point to the C++ compiler you wish to use.
+A physics System/Engine usually has the following components
 
-### Change Compiler Optimizations
+- **A World**
+   - A data-structure that contains all the physics objects in the "world\". Usually this also has some global parameters such as "Gravity\". Some physics engines allow you to have multiple "worlds\". Think of this like a \"Physics Scene\".
+- **An Integrator**
+   - This is the algorithm that runs each physics 'Tick' or 'Step', to calculate the acceleration, velocity, and position of all bodies in the world. The More 'ticks', the more accurate the simulation is. We usually don't have any control of the inner workings of this.
+- **Physics Bodies**
+   - Usually called Rigid Bodies (unless dealing with deformable or fluid things). These are things that have mass, inertia, position, and velocity. The physics Integrator moves these things around based on the rules of physics.
+- **Colliders**
+   - These are the physical 'shapes' of bodies. e.g cubes, circles, polygons. They determine how two bodies collide with each other. A body is just an abstract 'thing' that has mass. Colliders give them shapes and behaviour.
+- **Constraints**
+   - Connect Bodies together, either permanently, or based on some form of logic (elastic, ropes, springs, hinges, axles).
 
-CMake abstracts away specific optimizer flags through the [`CMAKE_BUILD_TYPE`](https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html) option.
-By default this project recommends `Release` builds which enable optimizations.
-Other build types include `Debug` builds which enable debug symbols but disable optimizations.
-If you're using a multi-configuration generator (as is often the case on Windows), you can modify the [`CMAKE_CONFIGURATION_TYPES`](https://cmake.org/cmake/help/latest/variable/CMAKE_CONFIGURATION_TYPES.html#variable:CMAKE_CONFIGURATION_TYPES) option.
+The typical process of dealing with a physics engine is as follows:
 
-### Change Generators
+1.  Create the world
+2.  Create Bodies and attach colliders to them
+3.  Each Update(), step the physics simulation.
+4.  Update Entity positions to that of the physics bodies.
 
-While CMake will attempt to pick a suitable default generator, some systems offer a number of generators to choose from.
-Ubuntu, for example, offers Makefiles and Ninja as two potential options.
-For a list of generators, click [here](https://cmake.org/cmake/help/latest/manual/cmake-generators.7.html).
-To modify the generator you're using you must reconfigure your project providing a `-G` flag with a value corresponding to the generator you want.
-You can't simply modify an entry in the CMakeCache.txt file unlike the above options.
-Then you may rebuild your project with this new generator.
+As you can see, we keep the physics world separate from the Game world. We leave this all to box2D to manage. After a simulation step, we look at the new positions of all the objects in the physics world and copy the new positions to the 'real' world render objects.
 
-## More Reading
+### Interactivity
 
-Here are some useful resources if you want to learn more about CMake:
+So far this works well for an initial scene, but we want interactivity, we want a game. For this we need to feed some game logic *into* the physics world.
 
-- [How to Use CMake Without the Agonizing Pain - Part 1](https://alexreinking.com/blog/how-to-use-cmake-without-the-agonizing-pain-part-1.html)
-- [How to Use CMake Without the Agonizing Pain - Part 2](https://alexreinking.com/blog/how-to-use-cmake-without-the-agonizing-pain-part-2.html)
-- [Better CMake YouTube series by Jefferon Amstutz](https://www.youtube.com/playlist?list=PL8i3OhJb4FNV10aIZ8oF0AA46HgA2ed8g)
+We are allowed to manually set the position and velocity of any physics body as a cheap "teleport". Doing this isn't great as it breaks the rules of physics that B2D is trying to stick to. Things don't just teleport in real life. Instead we should use "impulses".
 
-## License
+### Impulses
 
-The source code is dual licensed under Public Domain and MIT -- choose whichever you prefer.
+These are momentary forces that are applied to a body for one frame. Think of it as giving a thing a little or nudge, or in some cases, strapping rockets to a box for one frame. This is how we will mostly move things around in the physics world, as it obeys the rules of physics. Heavier objects will need a larger impulse force.
+
+### Cheating Physics {#cheatphysics}
+
+If our game was solely physical bodies moving around realistically, impulses would be all we needed. Unfortunately in the world of games, we tend to need things that don't *quite* follow *all* the rules of physics.
+
+Think of Super Mario, he can jump and fall and collide with things, which obey the rules of physics. However, Mario never rotates. He also jumps very quickly, to a set height, and then falls down rather slowly. He can move at set speed left and right, he never "accelerates" up to that speed.
+
+Figuring out the correct amount of newtons to impulse Mario by when he jumps seems like a complicated step backwards. We just want him to \"jump\" like a video game character. This is the folly of physics engines, they work so hard to give us a near-perfect physical world, only for us to introduce strange limitations and additions to make it feel fun. It can feel at times like the physics system is working against you, a beast to be tamed that really *really* wants to make things go flying off at light-speed (Cite: any Bethesda game).
+
+
+## Working with Box2D
+
+
+There are three major factors that we must consider when working with B2D specifically.
+
+1.  B2D has it's own Vector maths classes that we must convert to/from
+2.  B2D's world goes upwards. Positive Y is towards the top of the screen.
+3.  B2D's world has a 'scale'. We render things in 'pixels'.
+- A sf::box would be 100 'pixels' wide. How much is this in real world units? 100cm, 100m?
+- Usually I use 1 unit = 1 meter, when working on 3D games.
+-  Box2D has a recommended 30 'units' per 1 'pixel' that feels realistic.
+
+
+Converting between SMFL 'screen space' and B2D 'physics world space' requires taking the above 3 factors into account.
+
+### Creating the world
+
+For this practical we will using a single main.cpp approach to get the basics of B2D shown.
+
+```cpp
+//main.cpp
+b2World* world;
+
+void init() {
+  const b2Vec2 gravity(0.0f, -10.0f);
+
+  // Construct a world, which holds and simulates the physics bodies.
+  world = new b2World(gravity);
+  ...
+}
+```
+
+Done, we've just created a world, in 3 lines.
+
+{:class="important"}
+You will need to remeber to add the correct include statements, or the above and below code will throw errors!
+
+### Creating physics Bodies
+
+I'll give you five functions. The first 3 are conversion helper functions to deal with translating between the two worlds. The CreatePhysicsBox() is the biggie, inside is all the B2D logic required to add a body to the scene. The last function in an overload of the fourth, which takes in a sf::RectangleShape rather than a position and size.
+
+**Remember you should by now know what you need to include, and what namespaces things come from, so don't forget to add them!**
+
+```cpp
+//main.cpp
+// 1 sfml unit = 30 physics units
+const float physics_scale = 30.0f;
+// inverse of physics_scale, useful for calculations
+const float physics_scale_inv = 1.0f / physics_scale;
+// Magic numbers for accuracy of physics simulation
+const int32 velocityIterations = 6;
+const int32 positionIterations = 2;
+
+//Convert from b2Vec2 to a Vector2f
+inline const Vector2f bv2_to_sv2(const b2Vec2& in) {
+  return Vector2f(in.x * physics_scale, (in.y * physics_scale));
+}
+//Convert from Vector2f to a b2Vec2
+inline const b2Vec2 sv2_to_bv2(const Vector2f& in) {
+  return b2Vec2(in.x * physics_scale_inv, (in.y * physics_scale_inv));
+}
+//Convert from screenspace.y to physics.y (as they are the other way around)
+inline const Vector2f invert_height(const Vector2f& in) {
+  return Vector2f(in.x, gameHeight - in.y);
+}
+
+//Create a Box2D body with a box fixture
+b2Body* CreatePhysicsBox(b2World& World, const bool dynamic, const Vector2f& position, const Vector2f& size) {
+  b2BodyDef BodyDef;
+  //Is Dynamic(moving), or static(Stationary)
+  BodyDef.type = dynamic ? b2_dynamicBody : b2_staticBody;
+  BodyDef.position = sv2_to_bv2(position);
+  //Create the body
+  b2Body* body = World.CreateBody(&BodyDef);
+
+  //Create the fixture shape
+  b2PolygonShape Shape;
+  Shape.SetAsBox(sv2_to_bv2(size).x * 0.5f, sv2_to_bv2(size).y * 0.5f);
+  b2FixtureDef FixtureDef;
+  //Fixture properties
+  FixtureDef.density = dynamic ? 10.f : 0.f;
+  FixtureDef.friction = dynamic ? 0.8f : 1.f;
+  FixtureDef.restitution = 1.0;
+  FixtureDef.shape = &Shape;
+  //Add to body
+  body->CreateFixture(&FixtureDef);
+  return body;
+}
+
+// Create a Box2d body with a box fixture, from a sfml::RectangleShape
+b2Body* CreatePhysicsBox(b2World& world, const bool dynamic, const RectangleShape& rs) {
+  return CreatePhysicsBox(world, dynamic, rs.getPosition(), rs.getSize());
+}
+
+```
+
+Let's put it to use, back to that Init() function.
+
+
+```cpp
+//main.cpp
+std::vector<b2Body*> bodies;
+std::vector<RectangleShape*> sprites;
+...
+
+void init() {
+...
+  // Create Boxes
+  for (int i = 1; i < 11; ++i) {
+    // Create SFML shapes for each box
+    auto s = new RectangleShape();
+    s->setPosition(Vector2f(i * (gameWidth / 12.f), gameHeight * .7f));
+    s->setSize(Vector2f(50.0f, 50.0f));
+    s->setOrigin(Vector2f(25.0f, 25.0f));
+    s->setFillColor(Color::White);
+    sprites.push_back(s);
+    
+    // Create a dynamic physics body for the box
+    auto b = CreatePhysicsBox(*world, true, *s);
+    // Give the box a spin
+    b->ApplyAngularImpulse(5.0f, true);
+    bodies.push_back(b);
+  }
+}
+```
+
+So we are creating 10 boxes - both as sfml::RectangleShapes and b2d::bodies, and storing them both in global vectors. Now we just need to keep them in sync. Can you guess what's coming next?
+### Updating physics Bodies
+
+This is a two step process, 1: Stepping the physics world, and then copying the data from the bodies to the sf::shapes.
+
+
+```cpp
+//main.cpp
+void Update() {
+  static sf::Clock clock;
+  float dt = clock.restart().asSeconds();
+  
+  // Step Physics world by dt (non-fixed timestep) - THIS DOES ALL THE ACTUAL SIMULATION, DON'T FORGET THIS!
+  world->Step(dt, velocityIterations, positionIterations);
+
+  for (int i = 0; i < bodies.size(); ++i) {
+    // Sync Sprites to physics position
+    sprites[i]->setPosition(invert_height(bv2_to_sv2(bodies[i]->GetPosition())));
+    // Sync Sprites to physics Rotation
+    sprites[i]->setRotation((180 / b2_pi) * bodies[i]->GetAngle());
+  }
+}
+```
+
+{:class="important"}
+You now need to ensure that you *render* these boxes so you can test that they do, indeed, move!
+
+### Walls
+
+At the moment our boxes just fall into the abyss. Let's put some walls in. Back to Init() for one last time. We will create 4 walls. The position and size of each will be stored continuously in a vector that we will loop through. I'll let you figure out the full details. In the end it should look like this:
+
+```cpp
+//main.cpp
+
+void init() {
+ ...
+  // Wall Dimensions
+  Vector2f walls[] = {
+   // Top
+   Vector2f(gameWidth * .5f, 5.f), Vector2f(gameWidth, 10.f),
+   // Bottom
+   Vector2f(gameWidth * .5f, gameHeight - 5.f), Vector2f(gameWidth, 10.f),
+   // left
+   Vector2f(5.f, gameHeight * .5f), Vector2f(10.f, gameHeight),
+   // right
+   Vector2f(gameWidth - 5.f, gameHeight * .5f), Vector2f(10.f, gameHeight)
+  };
+
+  // Build Walls
+  for (int i = 0; i < 7; i += 2) {
+    // Create SFML shapes for each wall
+    ...
+    sprites.push_back(s);
+    // Create a static physics body for the wall
+   ...
+  }
+  // Create Boxes
+  ...
+  bodies.push_back(b);
+}
+```
+
+A hint: we've defined the vectors in that way so we can store both the central point and size in pairs, hence the slightly different for loop.
+Hint 2: the origin is a bit more tricky to get right, but remember you can divide a vector by a number if you need to!
+
+{:class="important"}
+Don't move on until you have some bouncin' boxes like the gif at the top!
+
+
+
+---------
